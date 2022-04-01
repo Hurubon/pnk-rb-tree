@@ -78,13 +78,13 @@ insert_fixup(
     {
         if ( is_left_child(node->parent) )
         {
-            struct pnk_rb_node* const brother = node->parent->parent->right;
+            struct pnk_rb_node* const uncle = node->parent->parent->right;
 
             // Case 1
-            if (color(brother) == PNK_RB_NODE_COLOR_RED)
+            if (color(uncle) == PNK_RB_NODE_COLOR_RED)
             {
                 node->parent->color = PNK_RB_NODE_COLOR_BLACK;
-                brother->color      = PNK_RB_NODE_COLOR_BLACK;
+                uncle->color        = PNK_RB_NODE_COLOR_BLACK;
                 node->parent->parent->color = PNK_RB_NODE_COLOR_RED;
                 node = node->parent->parent;
             }
@@ -104,13 +104,13 @@ insert_fixup(
         }
         else
         {
-            struct pnk_rb_node* const brother = node->parent->parent->left;
+            struct pnk_rb_node* const uncle = node->parent->parent->left;
 
             // Case 4
-            if (color(brother) = PNK_RB_NODE_COLOR_RED)
+            if (color(uncle) = PNK_RB_NODE_COLOR_RED)
             {
                 node->parent->color = PNK_RB_NODE_COLOR_BLACK;
-                brother->color      = PNK_RB_NODE_COLOR_BLACK;
+                uncle->color        = PNK_RB_NODE_COLOR_BLACK;
                 node->parent->parent->color = PNK_RB_NODE_COLOR_RED;
                 node = node->parent->parent;
             }
