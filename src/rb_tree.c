@@ -1,4 +1,5 @@
-#include "rb_tree.h"
+#include <stddef.h>
+#include <pnk/rb_tree.h>
 
 static inline enum pnk_rb_node_color
 color(struct pnk_rb_node const* node)
@@ -22,6 +23,23 @@ is_right_child(struct pnk_rb_node const* node)
 }
 
 static inline void
+transplant(
+    struct pnk_rb_tree* tree,
+    struct pnk_rb_node* u,
+    struct pnk_rb_node* v)
+{
+    if ( is_left_child(u) )
+        u->parent->left  = v;
+    else if ( is_right_child(u) )
+        u->parent->right = v;
+    else
+        tree->root = v;
+
+    if (v != NULL)
+        v->parent = u->parent;
+}
+
+static inline void
 left_rotate(
     struct pnk_rb_tree* tree,
     struct pnk_rb_node* root)
@@ -32,14 +50,7 @@ left_rotate(
     if (pivot->left != NULL)
         pivot->left->parent = root;
 
-    pivot->parent = root->parent;
-
-    if ( is_left_child(root) )
-        root->parent->left  = pivot;
-    else if ( is_right_child(root) )
-        root->parent->right = pivot;
-    else
-        tree->root = pivot;
+    transplant(tree, root, pivot);
 
     pivot->left = root;
     root->parent = pivot;
@@ -56,14 +67,7 @@ right_rotate(
     if (pivot->right != NULL)
         pivot->right->parent = root;
 
-    pivot->parent = root->parent;
-
-    if ( is_left_child(root) )
-        root->parent->left  = pivot;
-    else if ( is_right_child(root) )
-        root->parent->right = pivot;
-    else
-        tree->root = pivot;
+    transplant(tree, root, pivot);
 
     pivot->right = root;
     root->parent = pivot;
@@ -107,7 +111,7 @@ insert_fixup(
             struct pnk_rb_node* const uncle = node->parent->parent->left;
 
             // Case 4
-            if (color(uncle) = PNK_RB_NODE_COLOR_RED)
+            if (color(uncle) == PNK_RB_NODE_COLOR_RED)
             {
                 node->parent->color = PNK_RB_NODE_COLOR_BLACK;
                 uncle->color        = PNK_RB_NODE_COLOR_BLACK;
@@ -131,6 +135,89 @@ insert_fixup(
     }
 
     tree->root->color = PNK_RB_NODE_COLOR_BLACK;
+}
+
+static inline void
+delete_fixup(
+    struct pnk_rb_tree* tree,
+    struct pnk_rb_node* node)
+{
+    while (node != NULL && node != tree->root && color(node) == PNK_RB_NODE_COLOR_BLACK)
+    {
+        if ( is_left_child(node) )
+        {
+            struct pnk_rb_node* brother = node->parent->right;
+
+            if (color(brother) == PNK_RB_NODE_COLOR_RED)
+            {
+                brother->color = PNK_RB_NODE_COLOR_BLACK;
+                node->parent->color = PNK_RB_NODE_COLOR_RED;
+                left_rotate(tree, node->parent);
+                brother = node->parent->right;
+            }
+
+            if (color(brother->left ) == PNK_RB_NODE_COLOR_BLACK &&
+                color(brother->right) == PNK_RB_NODE_COLOR_BLACK)
+            {
+                brother->color = PNK_RB_NODE_COLOR_RED;
+                node = node->parent;
+            }
+            else
+            {
+                if (color(brother->right) == PNK_RB_NODE_COLOR_BLACK)
+                {
+                    brother->left->color = PNK_RB_NODE_COLOR_BLACK;
+                    brother->color = PNK_RB_NODE_COLOR_RED;
+                    right_rotate(tree, brother);
+                    brother = node->parent->right;
+                }
+
+                brother->color = node->parent->color;
+                node->parent->color   = PNK_RB_NODE_COLOR_BLACK;
+                brother->right->color = PNK_RB_NODE_COLOR_BLACK;
+                left_rotate(tree, node->parent);
+                node = tree->root;
+            }
+        }
+        else
+        {
+            struct pnk_rb_node* brother = node->parent->left;
+
+            if (color(brother) == PNK_RB_NODE_COLOR_RED)
+            {
+                brother->color = PNK_RB_NODE_COLOR_BLACK;
+                node->parent->color = PNK_RB_NODE_COLOR_RED;
+                right_rotate(tree, node->parent);
+                brother = node->parent->left;
+            }
+
+            if (color(brother->left ) == PNK_RB_NODE_COLOR_BLACK &&
+                color(brother->right) == PNK_RB_NODE_COLOR_BLACK)
+            {
+                brother->color = PNK_RB_NODE_COLOR_RED;
+                node = node->parent;
+            }
+            else
+            {
+                if (color(brother->left) == PNK_RB_NODE_COLOR_BLACK)
+                {
+                    brother->right->color = PNK_RB_NODE_COLOR_BLACK;
+                    brother->color = PNK_RB_NODE_COLOR_RED;
+                    left_rotate(tree, brother);
+                    brother = node->parent->left;
+                }
+
+                brother->color = node->parent->color;
+                node->parent->color   = PNK_RB_NODE_COLOR_BLACK;
+                brother->left->color = PNK_RB_NODE_COLOR_BLACK;
+                right_rotate(tree, node->parent);
+                node = tree->root;
+            }
+        }
+    }
+
+    if (node != NULL)
+        node->color = PNK_RB_NODE_COLOR_BLACK;
 }
 
 bool
@@ -264,7 +351,6 @@ pnk_rb_tree_insert(
     struct pnk_rb_tree* tree,
     struct pnk_rb_node* node)
 {
-    // Case 1.
     if ( pnk_rb_tree_is_empty(tree) )
     {
         tree->root = node;
@@ -282,7 +368,6 @@ pnk_rb_tree_insert(
             lead = lead->left;
         else
             lead = lead->right;
-        // TODO: What if node.key == lead.key?
     }
 
     node->parent = lag;
@@ -292,7 +377,55 @@ pnk_rb_tree_insert(
         lag->left = node;
     else
         lag->right = node;
-    // TODO: What if node.key == lag.key?
 
     insert_fixup(tree, node);
+}
+
+void
+pnk_rb_tree_delete(
+    struct pnk_rb_tree* tree,
+    struct pnk_rb_node* node)
+{
+    struct pnk_rb_node* x = NULL;
+    struct pnk_rb_node* y = node;
+    enum pnk_rb_node_color y_original_color = y->color;
+
+    if (node->left == NULL)
+    {
+        x = node->right;
+        transplant(tree, node, node->right);
+    }
+    else if (node->right == NULL)
+    {
+        x = node->left;
+        transplant(tree, node, node->left);
+    }
+    else
+    {
+        y = pnk_rb_tree_minimum(node->right);
+        x = y->right;
+        y_original_color = y->color;
+
+        // Note: x != NULL added.
+        if (x != NULL && y->parent == node)
+        {
+            x->parent = y;
+        }
+        else
+        {
+            transplant(tree, y, y->right);
+            y->right = node->right;
+            // Note: Added check.
+            if (y->right != NULL)
+                y->right->parent = y;
+        }
+
+        transplant(tree, node, y);
+        y->left = node->left;
+        y->left->parent = y;
+        y->color = node->color;
+    }
+
+    if (y_original_color == PNK_RB_NODE_COLOR_BLACK)
+        delete_fixup(tree, x);
 }
